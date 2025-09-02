@@ -7,9 +7,10 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
+// Middleware - BODY SIZE LIMIT ARTTIRILDI
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));  // 50MB limit
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Memory storage for Railway (dosyaları memory'de tut)
 const storage = multer.memoryStorage();
