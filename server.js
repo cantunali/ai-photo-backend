@@ -77,9 +77,9 @@ app.post('/api/process', async (req, res) => {
       timeout: 120000
     });
     
-    res.json({
+res.json({
       success: true,
-      processedImageUrl: response.data.imageUrl,
+      processedImageUrl: response.data.imageUrl || response.data.images?.[0]?.url,
       originalRequest: response.data.originalRequest
     });
     
