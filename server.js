@@ -2,17 +2,25 @@ const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const axios = require('axios');
+const cloudinary = require('cloudinary').v2;
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware - BODY SIZE LIMIT ARTTIRILDI
+// Cloudinary config
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+// Middleware
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));  // 50MB limit
+app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Memory storage for Railway (dosyaları memory'de tut)
+// Memory storage for multer
 const storage = multer.memoryStorage();
 const upload = multer({ 
   storage: storage,
@@ -32,14 +40,13 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK' });
 });
 
-// Upload endpoint
+// Upload endpoint (artık kullanılmıyor ama bırakalım)
 app.post('/api/upload', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'Dosya yüklenmedi' });
     }
     
-    // Base64'e çevir
     const base64 = req.file.buffer.toString('base64');
     const dataUri = `data:${req.file.mimetype};base64,${base64}`;
     
@@ -53,38 +60,67 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
   }
 });
 
-// Process with N8N
+// Process with N8N and Cloudinary
 app.post('/api/process', async (req, res) => {
   try {
     const { imageUrl, selections } = req.body;
+    console.log('Process request received');
+    
+    let finalImageUrl = imageUrl;
+    
+    // Base64'ü Cloudinary'ye yükle
+    if (imageUrl && imageUrl.startsWith('data:')) {
+      console.log('Uploading to Cloudinary...');
+      
+      const uploadResult = await cloudinary.uploader.upload(imageUrl, {
+        folder: 'ai-photos-temp',
+        resource_type: 'auto',
+        tags: ['temp', `delete_${Date.now()}`]
+      });
+      
+      finalImageUrl = uploadResult.secure_url;
+      console.log('Image URL (temporary):', finalImageUrl);
+      
+      // 12 saat sonra sil
+      setTimeout(() => {
+        cloudinary.uploader.destroy(uploadResult.public_id).catch(err => {
+          console.log('Auto-delete error (can be ignored):', err);
+        });
+      }, 12 * 60 * 60 * 1000);
+    }
     
     const webhookUrl = process.env.N8N_WEBHOOK_URL;
     
     if (!webhookUrl) {
-      // Demo response
+      console.log('N8N URL not configured - Demo mode');
       return res.json({
         success: true,
-        processedImageUrl: imageUrl,
-        demo: true,
-        message: 'N8N URL tanımlanmamış - Demo mod'
+        processedImageUrl: finalImageUrl,
+        demo: true
       });
     }
     
+    console.log('Sending to N8N with URL:', finalImageUrl);
     const response = await axios.post(webhookUrl, {
-      imageUrl,
+      imageUrl: finalImageUrl,
       selections
     }, {
-      timeout: 120000
+      timeout: 120000,
+      headers: {
+        'Content-Type': 'application/json'
+      }
     });
     
-res.json({
+    console.log('N8N response received');
+    
+    res.json({
       success: true,
-      processedImageUrl: response.data.imageUrl || response.data.images?.[0]?.url,
-      originalRequest: response.data.originalRequest
+      processedImageUrl: response.data.imageUrl || response.data.images?.[0]?.url || finalImageUrl,
+      originalImageUrl: finalImageUrl
     });
     
   } catch (error) {
-    console.error('Process error:', error);
+    console.error('Process error:', error.message);
     res.status(500).json({ 
       error: 'İşlem hatası',
       details: error.message 
@@ -92,6 +128,26 @@ res.json({
   }
 });
 
+// Cleanup old images
+const cleanupOldImages = async () => {
+  try {
+    const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
+    
+    const result = await cloudinary.api.delete_resources_by_tag('temp', {
+      created_at: `<${twelveHoursAgo.toISOString()}`
+    });
+    
+    console.log('Cleanup completed:', result);
+  } catch (error) {
+    console.error('Cleanup error:', error);
+  }
+};
+
+// Her 6 saatte bir temizlik yap
+setInterval(cleanupOldImages, 6 * 60 * 60 * 1000);
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`N8N Webhook: ${process.env.N8N_WEBHOOK_URL || 'Not configured'}`);
+  console.log(`Cloudinary: ${process.env.CLOUDINARY_CLOUD_NAME ? 'Configured' : 'Not configured'}`);
 });
