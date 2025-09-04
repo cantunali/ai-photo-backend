@@ -1,3 +1,11 @@
+
+// Debug için
+console.log('Environment Variables Check:');
+console.log('CLOUD_NAME:', process.env.CLOUDINARY_CLOUD_NAME ? 'SET' : 'NOT SET');
+console.log('API_KEY:', process.env.CLOUDINARY_API_KEY ? 'SET' : 'NOT SET');
+console.log('API_SECRET:', process.env.CLOUDINARY_API_SECRET ? 'SET' : 'NOT SET');
+
+
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
