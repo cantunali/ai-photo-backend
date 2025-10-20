@@ -36,8 +36,8 @@ const corsOptions = {
   origin: [
     'http://localhost:5173',
     'http://localhost:5174', 
-    'https://*.netlify.app', // Tüm Netlify alt domainleri
-    'https://ai-photo-transform.netlify.app' // Netlify Frontend URL
+    'https://ai-photo-transform.netlify.app', // Netlify Frontend URL
+    'https://deft-queijadas-bdd0f6.netlify.app' // Netlify alternate URL
   ],
   credentials: true,
   optionsSuccessStatus: 200
