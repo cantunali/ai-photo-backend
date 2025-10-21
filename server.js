@@ -48,6 +48,15 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    message: 'Backend is running'
+  });
+});
+
 // Memory storage for multer
 const storage = multer.memoryStorage();
 const upload = multer({ 
