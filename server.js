@@ -40,7 +40,11 @@ const corsOptions = {
     'https://deft-queijadas-bdd0f6.netlify.app' // Netlify alternate URL
   ],
   credentials: true,
-  optionsSuccessStatus: 200
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 200,
+  maxAge: 86400 // 24 hours
 };
 
 // Middleware
@@ -56,6 +60,9 @@ app.get('/health', (req, res) => {
     message: 'Backend is running'
   });
 });
+
+// CORS preflight handler for all routes
+app.options('*', cors(corsOptions));
 
 // Memory storage for multer
 const storage = multer.memoryStorage();
@@ -167,8 +174,8 @@ app.get('/api/auth/user', auth, (req, res) => {
       role: req.user.role,
       subscription: req.user.subscription,
       usage: {
-        photosProcessed: req.user.usage.photosProcessed,
-        monthlyLimit: req.user.usage.monthlyLimit,
+        used: req.user.usage.photosProcessed,
+        limit: req.user.usage.monthlyLimit,
         remaining: req.user.usage.monthlyLimit - req.user.usage.photosProcessed
       }
     }
