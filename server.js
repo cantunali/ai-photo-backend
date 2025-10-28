@@ -228,23 +228,24 @@ app.get('/api/auth/google/callback',
     console.log('🔐 Google OAuth Callback - FRONTEND_URL:', frontendURL);
     console.log('✅ JWT Token generated for user:', req.user.email);
     
-    // Set JWT in cookie
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
-    });
-    
-    res.redirect(`${frontendURL}/app?login=success`);
+    // Redirect with token in URL (frontend will save to localStorage)
+    res.redirect(`${frontendURL}/app?token=${token}`);
   }
 );
 
 // Check Auth Status (JWT)
 app.get('/api/auth/status', async (req, res) => {
   try {
-    // Get token from cookie or Authorization header
-    const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
+    // Get token from Authorization header, cookie, or x-auth-token header
+    let token = null;
+    
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+      token = req.headers.authorization.split(' ')[1];
+    } else if (req.cookies.token) {
+      token = req.cookies.token;
+    } else if (req.headers['x-auth-token']) {
+      token = req.headers['x-auth-token'];
+    }
     
     if (!token) {
       return res.json({ authenticated: false });
@@ -257,7 +258,6 @@ app.get('/api/auth/status', async (req, res) => {
     }
     
     // Get user from database
-    const User = require('./models/User');
     const user = await User.findById(decoded.userId);
     
     if (!user) {

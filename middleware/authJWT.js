@@ -5,8 +5,16 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-i
 
 const authJWT = async (req, res, next) => {
   try {
-    // Get token from cookie or Authorization header
-    const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
+    // Get token from Authorization header (Bearer token), cookie, or x-auth-token header
+    let token = null;
+    
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+      token = req.headers.authorization.split(' ')[1];
+    } else if (req.cookies.token) {
+      token = req.cookies.token;
+    } else if (req.headers['x-auth-token']) {
+      token = req.headers['x-auth-token'];
+    }
     
     if (!token) {
       return res.status(401).json({ error: 'Unauthorized - No token provided' });
