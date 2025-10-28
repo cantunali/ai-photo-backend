@@ -81,7 +81,11 @@ const sendPasswordResetEmail = async (email, resetToken, displayName) => {
   try {
     if (resend) {
       // Use Resend
-      await resend.emails.send({
+      console.log('📧 Sending email via Resend...');
+      console.log('From:', process.env.EMAIL_FROM || 'onboarding@resend.dev');
+      console.log('To:', email);
+      
+      const result = await resend.emails.send({
         from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
         to: email,
         subject: 'Şifre Sıfırlama İsteği - AI Photo Transform',
@@ -102,7 +106,15 @@ const sendPasswordResetEmail = async (email, resetToken, displayName) => {
           <p>AI Photo Transform Ekibi</p>
         `
       });
-      console.log(`✅ Password reset email sent to: ${email} (via Resend)`);
+      
+      console.log('📬 Resend API Response:', JSON.stringify(result, null, 2));
+      
+      if (result.error) {
+        console.error('❌ Resend Error:', result.error);
+        return false;
+      }
+      
+      console.log(`✅ Password reset email sent to: ${email} (via Resend, ID: ${result.data?.id})`);
       return true;
     } else if (transporter) {
       // Use Nodemailer
