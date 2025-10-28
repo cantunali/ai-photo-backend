@@ -19,6 +19,8 @@ console.log('API_SECRET:', process.env.CLOUDINARY_API_SECRET ? '✅ SET' : '❌ 
 console.log('MONGODB_URI:', process.env.MONGODB_URI ? '✅ SET' : '❌ NOT SET');
 console.log('GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? '✅ SET' : '❌ NOT SET');
 console.log('GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? '✅ SET' : '❌ NOT SET');
+console.log('GOOGLE_CALLBACK_URL:', process.env.GOOGLE_CALLBACK_URL ? '✅ SET' : '❌ NOT SET');
+console.log('FRONTEND_URL:', process.env.FRONTEND_URL ? '✅ SET' : '❌ NOT SET');
 console.log('N8N_WEBHOOK_URL:', process.env.N8N_WEBHOOK_URL ? '✅ SET' : '❌ NOT SET');
 console.log('');
 
@@ -193,6 +195,7 @@ app.get('/api/auth/google/callback',
   (req, res) => {
     // Successful authentication
     const frontendURL = process.env.FRONTEND_URL || 'https://ai-photo-transform.netlify.app';
+    console.log('🔐 Google OAuth Callback - FRONTEND_URL:', frontendURL);
     res.redirect(`${frontendURL}/app?login=success`);
   }
 );
