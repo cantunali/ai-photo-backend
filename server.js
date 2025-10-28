@@ -602,6 +602,84 @@ app.get('/api/admin/users', authJWT, async (req, res) => {
   }
 });
 
+// Admin: Delete user
+app.delete('/api/admin/users/:userId', authJWT, async (req, res) => {
+  try {
+    // Only admin can access
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { userId } = req.params;
+
+    // Don't allow deleting yourself
+    if (userId === req.user._id.toString()) {
+      return res.status(400).json({ error: 'Kendi hesabınızı silemezsiniz' });
+    }
+
+    const deletedUser = await User.findByIdAndDelete(userId);
+
+    if (!deletedUser) {
+      return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+    }
+
+    console.log(`✅ User deleted: ${deletedUser.email}`);
+
+    res.json({
+      success: true,
+      message: 'Kullanıcı başarıyla silindi',
+      user: deletedUser
+    });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({ error: 'Kullanıcı silinirken hata oluştu' });
+  }
+});
+
+// Admin: Update user role
+app.patch('/api/admin/users/:userId', authJWT, async (req, res) => {
+  try {
+    // Only admin can access
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { userId } = req.params;
+    const { role } = req.body;
+
+    // Validate role
+    if (!['free', 'premium', 'admin'].includes(role)) {
+      return res.status(400).json({ error: 'Geçersiz role' });
+    }
+
+    // Don't allow changing yourself to non-admin
+    if (userId === req.user._id.toString() && role !== 'admin') {
+      return res.status(400).json({ error: 'Kendi admin rolünüzü değiştiremezsiniz' });
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { role },
+      { new: true }
+    ).select('-password -resetPasswordToken -resetPasswordExpires');
+
+    if (!updatedUser) {
+      return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+    }
+
+    console.log(`✅ User role updated: ${updatedUser.email} -> ${role}`);
+
+    res.json({
+      success: true,
+      message: 'Kullanıcı rolü güncellendi',
+      user: updatedUser
+    });
+  } catch (error) {
+    console.error('Update user error:', error);
+    res.status(500).json({ error: 'Kullanıcı güncellenirken hata oluştu' });
+  }
+});
+
 // Upload endpoint (artık kullanılmıyor ama bırakalım)
 app.post('/api/upload', upload.single('image'), async (req, res) => {
   try {
