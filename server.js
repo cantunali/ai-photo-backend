@@ -192,7 +192,7 @@ app.get('/api/auth/google/callback',
   passport.authenticate('google', { failureRedirect: '/login' }),
   (req, res) => {
     // Successful authentication
-    const frontendURL = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendURL = process.env.FRONTEND_URL || 'https://ai-photo-transform.netlify.app';
     res.redirect(`${frontendURL}/app?login=success`);
   }
 );
