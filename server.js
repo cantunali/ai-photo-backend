@@ -604,12 +604,20 @@ app.post('/api/auth/reset-password', async (req, res) => {
     
     // Token'ı hash'le ve veritabanında ara
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+    
+    console.log('🔍 Reset Password Request:');
+    console.log('   Received Token:', token);
+    console.log('   Hashed Token:', hashedToken);
+    
     const user = await User.findOne({
       resetPasswordToken: hashedToken,
       resetPasswordExpires: { $gt: new Date() }
     });
     
+    console.log('   Found User:', user ? user.email : 'NOT FOUND');
+    
     if (!user) {
+      console.log('❌ Reset token not found or expired');
       return res.status(400).json({ error: 'Geçersiz veya süresi dolmuş reset linki' });
     }
     
