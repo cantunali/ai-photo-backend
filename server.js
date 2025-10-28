@@ -928,6 +928,32 @@ const cleanupOldImages = async () => {
 // Her 6 saatte bir temizlik yap
 setInterval(cleanupOldImages, 6 * 60 * 60 * 1000);
 
+// Test endpoint for Resend API Key
+app.get('/api/test-resend', async (req, res) => {
+  try {
+    const apiKey = process.env.RESEND_API_KEY;
+    console.log('🔑 RESEND_API_KEY exists:', !!apiKey);
+    console.log('🔑 RESEND_API_KEY length:', apiKey ? apiKey.length : 0);
+    console.log('🔑 RESEND_API_KEY starts with:', apiKey ? apiKey.substring(0, 5) : 'N/A');
+    console.log('🔑 RESEND_API_KEY ends with:', apiKey ? apiKey.substring(apiKey.length - 5) : 'N/A');
+    
+    if (!resend) {
+      return res.json({ error: 'Resend not initialized', apiKey: !!apiKey });
+    }
+    
+    const result = await resend.emails.send({
+      from: 'onboarding@resend.dev',
+      to: 'delivered@resend.dev',
+      subject: 'Test Email',
+      html: '<p>Test</p>'
+    });
+    
+    res.json({ success: true, result });
+  } catch (error) {
+    res.json({ error: error.message, stack: error.stack });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`N8N Webhook: ${process.env.N8N_WEBHOOK_URL || 'Not configured'}`);
