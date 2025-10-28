@@ -10,7 +10,25 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const crypto = require('crypto');
 const admin = require('firebase-admin');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 require('dotenv').config();
+
+// JWT Helper Functions
+const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
+const JWT_EXPIRES_IN = '30d';
+
+const generateToken = (userId) => {
+  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+};
+
+const verifyToken = (token) => {
+  try {
+    return jwt.verify(token, JWT_SECRET);
+  } catch (error) {
+    return null;
+  }
+};
 
 // Debug için - dotenv yüklendikten sonra
 console.log('\n🔍 Environment Variables Check:');
@@ -38,6 +56,7 @@ try {
 
 const User = require('./models/User');
 const auth = require('./middleware/auth');
+const authJWT = require('./middleware/authJWT');
 const checkUsageLimit = require('./middleware/checkUsageLimit');
 
 const app = express();
@@ -92,6 +111,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(cookieParser());
 
 // Session Configuration
 app.use(session({
@@ -199,43 +219,77 @@ app.get('/api/auth/google',
 
 // Google OAuth Callback
 app.get('/api/auth/google/callback',
-  passport.authenticate('google', { failureRedirect: '/login' }),
+  passport.authenticate('google', { failureRedirect: '/login', session: false }),
   (req, res) => {
-    // Successful authentication
+    // Successful authentication - Generate JWT
+    const token = generateToken(req.user._id);
     const frontendURL = process.env.FRONTEND_URL || 'https://ai-photo-transform.netlify.app';
+    
     console.log('🔐 Google OAuth Callback - FRONTEND_URL:', frontendURL);
+    console.log('✅ JWT Token generated for user:', req.user.email);
+    
+    // Set JWT in cookie
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+    });
+    
     res.redirect(`${frontendURL}/app?login=success`);
   }
 );
 
-// Check Auth Status
-app.get('/api/auth/status', (req, res) => {
-  if (req.isAuthenticated()) {
+// Check Auth Status (JWT)
+app.get('/api/auth/status', async (req, res) => {
+  try {
+    // Get token from cookie or Authorization header
+    const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
+    
+    if (!token) {
+      return res.json({ authenticated: false });
+    }
+    
+    // Verify token
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      return res.json({ authenticated: false });
+    }
+    
+    // Get user from database
+    const User = require('./models/User');
+    const user = await User.findById(decoded.userId);
+    
+    if (!user) {
+      return res.json({ authenticated: false });
+    }
+    
     res.json({
       authenticated: true,
       user: {
-        id: req.user._id,
-        email: req.user.email,
-        displayName: req.user.displayName,
-        photoURL: req.user.photoURL,
-        role: req.user.role,
+        id: user._id,
+        email: user.email,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        role: user.role,
         usage: {
-          photosProcessed: req.user.usage.photosProcessed,
-          totalLimit: req.user.usage.totalLimit,
-          remaining: req.user.getRemainingPhotos(),
-          nextResetDate: req.user.getNextResetDate(),
-          daysUntilReset: req.user.getDaysUntilReset()
+          photosProcessed: user.usage.photosProcessed,
+          totalLimit: user.usage.totalLimit,
+          remaining: user.getRemainingPhotos(),
+          nextResetDate: user.getNextResetDate(),
+          daysUntilReset: user.getDaysUntilReset()
         },
-        subscription: req.user.subscription
+        subscription: user.subscription
       }
     });
-  } else {
+  } catch (error) {
+    console.error('Auth status error:', error);
     res.json({ authenticated: false });
   }
 });
 
 // Get Current User
-app.get('/api/auth/user', auth, (req, res) => {
+app.get('/api/auth/user', authJWT, (req, res) => {
   res.json({
     user: {
       id: req.user._id,
@@ -302,28 +356,32 @@ app.post('/api/auth/register', async (req, res) => {
     
     await user.save();
     
-    // Login user automatically
-    req.login(user, (err) => {
-      if (err) {
-        return res.status(500).json({ error: 'Kayıt başarılı ancak giriş başarısız oldu' });
+    // Generate JWT token
+    const token = generateToken(user._id);
+    
+    // Set JWT in cookie
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+    });
+    
+    res.json({
+      message: 'Kayıt başarılı',
+      user: {
+        id: user._id,
+        email: user.email,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        role: user.role,
+        usage: {
+          photosProcessed: user.usage.photosProcessed,
+          totalLimit: user.usage.totalLimit,
+          remaining: user.getRemainingPhotos()
+        },
+        subscription: user.subscription
       }
-      
-      res.json({
-        message: 'Kayıt başarılı',
-        user: {
-          id: user._id,
-          email: user.email,
-          displayName: user.displayName,
-          photoURL: user.photoURL,
-          role: user.role,
-          usage: {
-            photosProcessed: user.usage.photosProcessed,
-            totalLimit: user.usage.totalLimit,
-            remaining: user.getRemainingPhotos()
-          },
-          subscription: user.subscription
-        }
-      });
     });
   } catch (error) {
     console.error('Register error:', error);
@@ -362,30 +420,34 @@ app.post('/api/auth/login', async (req, res) => {
     user.lastLogin = new Date();
     await user.save();
     
-    // Login user
-    req.login(user, (err) => {
-      if (err) {
-        return res.status(500).json({ error: 'Giriş başarısız oldu' });
+    // Generate JWT token
+    const token = generateToken(user._id);
+    
+    // Set JWT in cookie
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+    });
+    
+    res.json({
+      message: 'Giriş başarılı',
+      user: {
+        id: user._id,
+        email: user.email,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        role: user.role,
+        usage: {
+          photosProcessed: user.usage.photosProcessed,
+          totalLimit: user.usage.totalLimit,
+          remaining: user.getRemainingPhotos(),
+          nextResetDate: user.getNextResetDate(),
+          daysUntilReset: user.getDaysUntilReset()
+        },
+        subscription: user.subscription
       }
-      
-      res.json({
-        message: 'Giriş başarılı',
-        user: {
-          id: user._id,
-          email: user.email,
-          displayName: user.displayName,
-          photoURL: user.photoURL,
-          role: user.role,
-          usage: {
-            photosProcessed: user.usage.photosProcessed,
-            totalLimit: user.usage.totalLimit,
-            remaining: user.getRemainingPhotos(),
-            nextResetDate: user.getNextResetDate(),
-            daysUntilReset: user.getDaysUntilReset()
-          },
-          subscription: user.subscription
-        }
-      });
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -393,15 +455,15 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Logout
+// Logout (JWT)
 app.post('/api/auth/logout', (req, res) => {
-  req.logout((err) => {
-    if (err) {
-      return res.status(500).json({ error: 'Logout failed' });
-    }
-    req.session.destroy();
-    res.json({ success: true, message: 'Logged out successfully' });
+  // Clear JWT cookie
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
   });
+  res.json({ success: true, message: 'Logged out successfully' });
 });
 
 // Forgot Password - Generate reset token
@@ -516,7 +578,7 @@ app.get('/api/auth/status', (req, res) => {
 });
 
 // Admin: Get all users
-app.get('/api/admin/users', auth, async (req, res) => {
+app.get('/api/admin/users', authJWT, async (req, res) => {
   try {
     // Only admin can access
     if (req.user.role !== 'admin') {
@@ -561,7 +623,7 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
 });
 
 // Process with N8N and Cloudinary (Protected Route)
-app.post('/api/process', auth, checkUsageLimit, async (req, res) => {
+app.post('/api/process', authJWT, checkUsageLimit, async (req, res) => {
   try {
     const { imageUrl, selections } = req.body;
     console.log('Process request received');
