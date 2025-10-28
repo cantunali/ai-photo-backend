@@ -1,0 +1,30 @@
+
+> backend@1.0.0 start
+> node server.js
+
+
+🔍 Environment Variables Check:
+CLOUD_NAME: ✅ SET
+API_KEY: ✅ SET
+API_SECRET: ✅ SET
+MONGODB_URI: ✅ SET
+GOOGLE_CLIENT_ID: ✅ SET
+GOOGLE_CLIENT_SECRET: ✅ SET
+N8N_WEBHOOK_URL: ✅ SET
+
+✅ Firebase Admin initialized
+
+> backend@1.0.0 start
+> node server.js
+
+
+🔍 Environment Variables Check:
+CLOUD_NAME: ✅ SET
+API_KEY: ✅ SET
+API_SECRET: ✅ SET
+MONGODB_URI: ✅ SET
+GOOGLE_CLIENT_ID: ✅ SET
+GOOGLE_CLIENT_SECRET: ✅ SET
+N8N_WEBHOOK_URL: ✅ SET
+
+✅ Firebase Admin initialized
