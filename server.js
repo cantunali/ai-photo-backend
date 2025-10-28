@@ -13,6 +13,7 @@ const admin = require('firebase-admin');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 require('dotenv').config();
 
 // JWT Helper Functions
@@ -31,11 +32,16 @@ const verifyToken = (token) => {
   }
 };
 
-// Nodemailer Configuration
+// Email Configuration
 let transporter = null;
+let resend = null;
 
 const initializeEmailService = () => {
-  if (process.env.EMAIL_SERVICE === 'gmail') {
+  if (process.env.EMAIL_SERVICE === 'resend') {
+    // Resend
+    resend = new Resend(process.env.RESEND_API_KEY);
+    console.log('✅ Resend email service configured');
+  } else if (process.env.EMAIL_SERVICE === 'gmail') {
     // Gmail with App Password
     transporter = nodemailer.createTransport({
       service: 'gmail',
@@ -44,17 +50,22 @@ const initializeEmailService = () => {
         pass: process.env.EMAIL_PASSWORD
       }
     });
+    console.log('✅ Gmail email service configured');
   } else if (process.env.EMAIL_SERVICE === 'custom') {
     // Custom SMTP server
     transporter = nodemailer.createTransport({
       host: process.env.EMAIL_HOST,
-      port: process.env.EMAIL_PORT,
+      port: parseInt(process.env.EMAIL_PORT) || 587,
       secure: process.env.EMAIL_SECURE === 'true',
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASSWORD
-      }
+      },
+      connectionTimeout: 60000,
+      greetingTimeout: 30000,
+      socketTimeout: 60000
     });
+    console.log('✅ Custom SMTP configured');
   } else {
     console.log('⚠️  Email service not configured - password reset emails will not be sent');
   }
@@ -65,39 +76,64 @@ initializeEmailService();
 
 // Email sending function
 const sendPasswordResetEmail = async (email, resetToken, displayName) => {
-  if (!transporter) {
-    console.log('⚠️  Email service not configured, skipping email send');
-    return true; // Don't fail, just skip
-  }
+  const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${resetToken}`;
 
   try {
-    const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${resetToken}`;
-    
-    const mailOptions = {
-      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-      to: email,
-      subject: 'Şifre Sıfırlama İsteği - AI Photo Transform',
-      html: `
-        <h2>Şifre Sıfırlama</h2>
-        <p>Merhaba ${displayName},</p>
-        <p>Şifrenizi sıfırlamak için aşağıdaki linke tıklayın:</p>
-        <p>
-          <a href="${resetLink}" style="background-color: #6366f1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
-            Şifremi Sıfırla
-          </a>
-        </p>
-        <p>Ya da bu linki tarayıcıya kopyala:</p>
-        <p>${resetLink}</p>
-        <p>Bu link 1 saat içinde geçerliliğini yitirecektir.</p>
-        <p>Bu isteği siz yapmadıysanız, bu emaili görmezden gelebilirsiniz.</p>
-        <br/>
-        <p>AI Photo Transform Ekibi</p>
-      `
-    };
-
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`✅ Password reset email sent to: ${email}`);
-    return true;
+    if (resend) {
+      // Use Resend
+      await resend.emails.send({
+        from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
+        to: email,
+        subject: 'Şifre Sıfırlama İsteği - AI Photo Transform',
+        html: `
+          <h2>Şifre Sıfırlama</h2>
+          <p>Merhaba ${displayName},</p>
+          <p>Şifrenizi sıfırlamak için aşağıdaki linke tıklayın:</p>
+          <p>
+            <a href="${resetLink}" style="background-color: #6366f1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+              Şifremi Sıfırla
+            </a>
+          </p>
+          <p>Ya da bu linki tarayıcıya kopyala:</p>
+          <p>${resetLink}</p>
+          <p>Bu link 1 saat içinde geçerliliğini yitirecektir.</p>
+          <p>Bu isteği siz yapmadıysanız, bu emaili görmezden gelebilirsiniz.</p>
+          <br/>
+          <p>AI Photo Transform Ekibi</p>
+        `
+      });
+      console.log(`✅ Password reset email sent to: ${email} (via Resend)`);
+      return true;
+    } else if (transporter) {
+      // Use Nodemailer
+      const mailOptions = {
+        from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+        to: email,
+        subject: 'Şifre Sıfırlama İsteği - AI Photo Transform',
+        html: `
+          <h2>Şifre Sıfırlama</h2>
+          <p>Merhaba ${displayName},</p>
+          <p>Şifrenizi sıfırlamak için aşağıdaki linke tıklayın:</p>
+          <p>
+            <a href="${resetLink}" style="background-color: #6366f1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+              Şifremi Sıfırla
+            </a>
+          </p>
+          <p>Ya da bu linki tarayıcıya kopyala:</p>
+          <p>${resetLink}</p>
+          <p>Bu link 1 saat içinde geçerliliğini yitirecektir.</p>
+          <p>Bu isteği siz yapmadıysanız, bu emaili görmezden gelebilirsiniz.</p>
+          <br/>
+          <p>AI Photo Transform Ekibi</p>
+        `
+      };
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Password reset email sent to: ${email} (via SMTP)`);
+      return true;
+    } else {
+      console.log('⚠️  Email service not configured, skipping email send');
+      return true; // Don't fail, just skip
+    }
   } catch (error) {
     console.error('❌ Error sending email:', error);
     return false;
