@@ -202,6 +202,32 @@ app.get('/api/auth/google/callback',
   }
 );
 
+// Check Auth Status
+app.get('/api/auth/status', (req, res) => {
+  if (req.isAuthenticated()) {
+    res.json({
+      authenticated: true,
+      user: {
+        id: req.user._id,
+        email: req.user.email,
+        displayName: req.user.displayName,
+        photoURL: req.user.photoURL,
+        role: req.user.role,
+        usage: {
+          photosProcessed: req.user.usage.photosProcessed,
+          totalLimit: req.user.usage.totalLimit,
+          remaining: req.user.getRemainingPhotos(),
+          nextResetDate: req.user.getNextResetDate(),
+          daysUntilReset: req.user.getDaysUntilReset()
+        },
+        subscription: req.user.subscription
+      }
+    });
+  } else {
+    res.json({ authenticated: false });
+  }
+});
+
 // Get Current User
 app.get('/api/auth/user', auth, (req, res) => {
   res.json({
