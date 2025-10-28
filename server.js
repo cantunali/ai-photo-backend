@@ -5,6 +5,7 @@ const axios = require('axios');
 const cloudinary = require('cloudinary').v2;
 const mongoose = require('mongoose');
 const session = require('express-session');
+const MongoStore = require('connect-mongo');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const crypto = require('crypto');
@@ -97,6 +98,11 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'ai-photo-transform-secret-key-2025',
   resave: false,
   saveUninitialized: false,
+  store: MongoStore.create({
+    mongoUrl: process.env.MONGODB_URI,
+    collectionName: 'sessions',
+    ttl: 30 * 24 * 60 * 60 // 30 days
+  }),
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
